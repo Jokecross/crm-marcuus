@@ -1,5 +1,7 @@
 # CRM des setters — Marcuus (Masterclass Black Friday 2026)
 
+En ligne : https://crm-marcuus-eight.vercel.app · espace membre : https://esapcemembre-marcuus.vercel.app
+
 Back-office des setters de la Masterclass Black Friday 2026 de Marcuus Lawrence,
 repris tel quel du CRM de Mexed (`~/CRM Mexed`, non modifié). Un seul fichier
 (`index.html`), sans build : Vercel le sert tel quel. Il lit et écrit dans le
