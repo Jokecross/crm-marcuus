@@ -1948,6 +1948,10 @@ const DEFAUT_EQUIPE = 'starter';
 const definition = (eq) => EQUIPES[eq] || EQUIPES[DEFAUT_EQUIPE];
 
 const estPartenaire = () => me.role === 'partenaire';
+/* Administrateur général : admin de toutes les équipes (Martin). Les
+   administrateurs d'équipe n'ont que la leur — la base dit la même chose. */
+const adminGeneral = () => me.role === 'admin'
+  && Object.keys(EQUIPES).every(e => (me.equipes || [me.equipe]).includes(e));
 const vuesDeMonEquipe = () => estPartenaire()
   // Une personne de l'agence n'a qu'un onglet : ce que son lien rapporte.
   // La base dit la même chose — elle ne lit aucun lead.
@@ -1955,7 +1959,7 @@ const vuesDeMonEquipe = () => estPartenaire()
   : VUES.filter(([id]) =>
       // Les partenaires, c'est de l'argent qui sort :
       // ça ne regarde que les administrateurs.
-      id === 'partenaires' ? me.role === 'admin'
+      id === 'partenaires' ? adminGeneral()
       // Le parcours automatique ouvre des accès payés : les administrateurs
       // seuls valident une facture.
       // Le parcours automatique de Mexed n'existe pas sur la page Marcuus.
@@ -2212,7 +2216,9 @@ function remplirMenusSetters(){
 /* Les équipes où la personne peut aller. Un administrateur les a toutes ;
    un setter en a une, parfois plusieurs. */
 function mesEquipes(){
-  if (me.role === 'admin') return Object.keys(EQUIPES);
+  // L'administrateur général a toutes les équipes ; un administrateur
+  // d'équipe (Marcuus Lawrence) n'a que la sienne, comme la base.
+  if (adminGeneral()) return Object.keys(EQUIPES);
   const liste = (me.equipes || [me.equipe]).filter(e => EQUIPES[e]);
   return liste.length ? liste : [DEFAUT_EQUIPE];
 }
@@ -3704,7 +3710,7 @@ function dessinerDisposEquipe(){
       </div>
     </div>
     <p class="dispo-limite">${sansLimite(sem) ? `Pas de limite cette semaine-là : la règle commence pour la semaine du ${lireJour(reglagesCrm.dispos_depart).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}. ` : ''}Limite : <b>${jl} ${hm(reglagesCrm.dispos_heure_limite)}</b>, à l'heure de chaque setter.
-      <button type="button" class="dispo-lien" data-dispo-reglage>Modifier</button></p>
+      ${adminGeneral() ? '<button type="button" class="dispo-lien" data-dispo-reglage>Modifier</button>' : ''}</p>
     <form class="dispo-reglage" id="disposReglage" hidden>
       <select name="jour" aria-label="Jour de la limite">${JOURS.map((j, i) =>
         `<option value="${i + 1}" ${i + 1 === reglagesCrm.dispos_jour_limite ? 'selected' : ''}>${j}</option>`).join('')}</select>
