@@ -1942,8 +1942,10 @@ const EQUIPES = {
     vues: ['jour', 'pipeline', 'relances', 'archive', 'dashboard', 'factures'],
     saisie: false,
   },
-  // Pas de dispos pour l'équipe Marcuus Lawrence (demande de Martin, 31/10).
-  marcuus: { nom: 'Marcuus Lawrence', vues: SANS_FORMULAIRE, saisie: true, dispos: false },
+  // Équipe Marcuus Lawrence : admins comme closers n'ont que les cinq
+  // onglets de SANS_FORMULAIRE — ni Dispos, ni Rapport, ni Présence
+  // (demande de Martin, 31/10).
+  marcuus: { nom: 'Marcuus Lawrence', vues: SANS_FORMULAIRE, saisie: true, dispos: false, suivi: false },
 };
 const DEFAUT_EQUIPE = 'starter';
 const definition = (eq) => EQUIPES[eq] || EQUIPES[DEFAUT_EQUIPE];
@@ -1968,9 +1970,9 @@ const vuesDeMonEquipe = () => estPartenaire()
       // Les dispos : chacun les siennes, l'administrateur celles de tous.
       : id === 'dispos' ? definition(equipeChoisie()).dispos !== false
       // La présence ne regarde que les administrateurs : rien chez le setter.
-      : id === 'presence' ? me.role === 'admin'
+      : id === 'presence' ? me.role === 'admin' && definition(equipeChoisie()).suivi !== false
       // Le rapport compte le travail de chacun : administrateurs seulement.
-      : id === 'rapport' ? me.role === 'admin'
+      : id === 'rapport' ? me.role === 'admin' && definition(equipeChoisie()).suivi !== false
       : definition(equipeChoisie()).vues.includes(id));
 
 const COLONNES = [
