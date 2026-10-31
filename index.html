@@ -1942,7 +1942,8 @@ const EQUIPES = {
     vues: ['jour', 'pipeline', 'relances', 'archive', 'dashboard', 'factures'],
     saisie: false,
   },
-  marcuus: { nom: 'Marcuus Lawrence', vues: SANS_FORMULAIRE, saisie: true },
+  // Pas de dispos pour l'équipe Marcuus Lawrence (demande de Martin, 31/10).
+  marcuus: { nom: 'Marcuus Lawrence', vues: SANS_FORMULAIRE, saisie: true, dispos: false },
 };
 const DEFAUT_EQUIPE = 'starter';
 const definition = (eq) => EQUIPES[eq] || EQUIPES[DEFAUT_EQUIPE];
@@ -1965,7 +1966,7 @@ const vuesDeMonEquipe = () => estPartenaire()
       // Le parcours automatique de Mexed n'existe pas sur la page Marcuus.
       : id === 'auto' ? false
       // Les dispos : chacun les siennes, l'administrateur celles de tous.
-      : id === 'dispos' ? true
+      : id === 'dispos' ? definition(equipeChoisie()).dispos !== false
       // La présence ne regarde que les administrateurs : rien chez le setter.
       : id === 'presence' ? me.role === 'admin'
       // Le rapport compte le travail de chacun : administrateurs seulement.
@@ -3510,7 +3511,7 @@ async function chargerReglages(){
    que sa limite est passée, il reste en haut de chaque page. */
 async function verifierDispos(){
   const bandeau = $('rappelDispos');
-  if (!me || me.role !== 'setter'){ bandeau.hidden = true; return; }
+  if (!me || me.role !== 'setter' || definition(equipeChoisie()).dispos === false){ bandeau.hidden = true; return; }
   await chargerReglages();
   const semaines = [lundi(0), lundi(1)];
   let faites;
