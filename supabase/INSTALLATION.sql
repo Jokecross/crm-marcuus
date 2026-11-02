@@ -5528,6 +5528,8 @@ begin
   tel := regexp_replace(coalesce(i.client_telephone, ''), '[^0-9+]', '', 'g');
   if tel ~ '^0[1-9][0-9]{8}$' then tel := '+33' || substr(tel, 2); end if;
   if tel ~ '^00' then tel := '+' || substr(tel, 3); end if;
+  -- 33617649718 : indicatif sans le « + ».
+  if tel ~ '^[1-9][0-9]{9,14}$' then tel := '+' || tel; end if;
   if char_length(tel) < 9 then
     raise exception 'Le téléphone du client est trop court : %', i.client_telephone;
   end if;
