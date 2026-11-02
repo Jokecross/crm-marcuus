@@ -5590,7 +5590,7 @@ async function chargerFactures(){
     // rapprocher côté navigateur.
     ventes = await api(
       `/rest/v1/leads?select=id,first_name,last_name,status,closed_at,created_at,setter_id,` +
-      `cash_collecte,commission,invoices(id,file_path,file_name,taille,created_at)` +
+      `cash_collecte,commission,invoices(id,file_path,file_name,taille,created_at,bucket)` +
       `&status=in.(monthly,yearly)${filtre}&equipe=eq.${equipeChoisie()}` +
       `&order=closed_at.desc.nullslast,created_at.desc`
     );
@@ -5718,6 +5718,7 @@ async function deposerFacture(){
         file_path: chemin,
         file_name: fichier.name,
         taille: fichier.size,
+        bucket: 'factures',
         created_at: new Date().toISOString()
       })
     });
@@ -5725,7 +5726,7 @@ async function deposerFacture(){
 
     // L'ancien fichier n'a plus de ligne qui le désigne : il ne reste pas
     // à dormir dans le seau.
-    if (ancienne && ancienne.file_path !== chemin){
+    if (ancienne && ancienne.file_path !== chemin && (!ancienne.bucket || ancienne.bucket === 'factures')){
       await api(`/storage/v1/object/factures/${ancienne.file_path}`, { method: 'DELETE' }).catch(() => {});
     }
     // La facture est posée sur la vente qu'on a déjà en main : la liste se
@@ -5750,7 +5751,8 @@ async function ouvrirFacture(v){
   // prendrait pour une fenêtre surgissante et le bloquerait.
   const onglet = window.open('', '_blank');
   try {
-    const d = await api(`/storage/v1/object/sign/factures/${f.file_path}`, {
+    // Les factures validées depuis l'espace membre vivent dans « factures-clients ».
+    const d = await api(`/storage/v1/object/sign/${f.bucket || 'factures'}/${f.file_path}`, {
       method: 'POST',
       body: JSON.stringify({ expiresIn: 900 })
     });
@@ -5770,7 +5772,8 @@ async function supprimerFacture(v){
   try {
     await api(`/rest/v1/invoices?id=eq.${f.id}`, { method: 'DELETE' });
     // Le fichier suit la ligne : on ne garde pas d'orphelin dans le seau.
-    await api(`/storage/v1/object/factures/${f.file_path}`, { method: 'DELETE' }).catch(() => {});
+    if (!f.bucket || f.bucket === 'factures')
+      await api(`/storage/v1/object/factures/${f.file_path}`, { method: 'DELETE' }).catch(() => {});
     v.invoices = null;
     toast('Facture supprimée.');
     rendreFactures();
