@@ -1965,8 +1965,9 @@ const vuesDeMonEquipe = () => estPartenaire()
       id === 'partenaires' ? adminGeneral()
       // Le parcours automatique ouvre des accès payés : les administrateurs
       // seuls valident une facture.
-      // Le parcours automatique de Mexed n'existe pas sur la page Marcuus.
-      : id === 'auto' ? false
+      // Le parcours automatique (numéros africains) : l'administrateur
+      // général seul vérifie les factures, dans l'équipe Base44.
+      : id === 'auto' ? adminGeneral() && equipeChoisie() === 'starter'
       // Les dispos : chacun les siennes, l'administrateur celles de tous.
       : id === 'dispos' ? definition(equipeChoisie()).dispos !== false
       // La présence ne regarde que les administrateurs : rien chez le setter.
