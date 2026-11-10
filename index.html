@@ -1966,7 +1966,7 @@ const definition = (eq) => EQUIPES[eq] || EQUIPES[DEFAUT_EQUIPE];
 const estPartenaire = () => me.role === 'partenaire';
 /* Administrateur général : admin de toutes les équipes (Martin). Les
    administrateurs d'équipe n'ont que la leur — la base dit la même chose. */
-const adminGeneral = () => me.role === 'admin'
+const adminGeneral = () => me.role === 'admin' && !Array.isArray(me.vues)
   && Object.keys(EQUIPES).every(e => (me.equipes || [me.equipe]).includes(e));
 const vuesDeMonEquipe = () => estPartenaire()
   // Une personne de l'agence n'a qu'un onglet : ce que son lien rapporte.
@@ -1992,8 +1992,12 @@ const vuesDeMonEquipe = () => estPartenaire()
       : id === 'rapport' ? me.role === 'admin' && definition(equipeChoisie()).suivi !== false
       // Les chiffres de chaque lien de la page de vente, pour décider où
       // mettre le budget : l'administrateur général, équipe Base44.
-      : id === 'sources' ? adminGeneral() && equipeChoisie() === 'starter'
-      : definition(equipeChoisie()).vues.includes(id));
+      : id === 'sources' ? (adminGeneral() || (me.vues || []).includes('sources')) && equipeChoisie() === 'starter'
+      : definition(equipeChoisie()).vues.includes(id))
+      // Compte « direction » (staff.vues, 10-acces-direction.sql) : seulement
+      // les onglets de sa liste. La base dit la même chose : jamais admin
+      // général, pas d'espace membre.
+      .filter(([id]) => !Array.isArray(me.vues) || me.vues.includes(id));
 
 const COLONNES = [
   ['',            null,           ''],
@@ -2152,7 +2156,8 @@ async function demarrer(){
   $('meName').textContent = [me.first_name, me.last_name].filter(Boolean).join(' ');
   if ($('meNameMenu')) $('meNameMenu').textContent = $('meName').textContent;
   $('meAv').textContent = ((me.first_name || '')[0] || '') + ((me.last_name || '')[0] || '');
-  $('meRole').textContent = me.role === 'admin' ? 'Administrateur'
+  $('meRole').textContent = Array.isArray(me.vues) ? 'Direction'
+                          : me.role === 'admin' ? 'Administrateur'
                           : me.role === 'partenaire' ? 'Partenaire' : 'Setter';
 
   // Réglé avant la navigation : c'est lui qui décide des onglets affichés.
@@ -5787,7 +5792,7 @@ function rendreFactures(){
     const action = f
       ? `<button class="fact-a" data-fact-ouvrir="${v.id}">Ouvrir</button>` +
         (sien ? `<button class="fact-a" data-fact-deposer="${v.id}">Remplacer</button>` : '') +
-        (sien || admin ? `<button class="fact-x" data-fact-suppr="${v.id}" title="Supprimer" aria-label="Supprimer">✕</button>` : '')
+        (sien || (admin && !Array.isArray(me.vues)) ? `<button class="fact-x" data-fact-suppr="${v.id}" title="Supprimer" aria-label="Supprimer">✕</button>` : '')
       : sien
         ? `<button class="fact-a fact-a--du" data-fact-deposer="${v.id}">Déposer la facture</button>`
         : `<button class="fact-a" disabled>Non déposée</button>`;
