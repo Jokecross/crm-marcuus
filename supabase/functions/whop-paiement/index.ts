@@ -7,19 +7,19 @@
 //  L'identifiant du lead part en metadata, pour que le webhook
 //  (whop-webhook) le fasse passer d'« Opt-in » aux « Leads du jour ».
 //
-//  Secrets (Supabase → Edge Functions → Secrets) :
+//  Secret (Supabase → Edge Functions → Secrets) :
 //    WHOP_API_KEY      clé API du compte Whop de Marcuus (permission payment:charge)
-//    WHOP_ACCOUNT_ID   l'entreprise Whop : biz_2UPvDyOXoBRIxE
-//    WHOP_PLAN_ID      le plan à 9,99 € : plan_DrtsM796QriYh
-//  Le plan est fixé ici, pas par la page : on ne laisse pas un visiteur
-//  choisir ce qu'il paie.
+//  L'entreprise (biz_…) et le plan à 9,99 € (plan_…) ne sont pas secrets :
+//  ils sont écrits ici (et dans la page). Un secret du même nom, s'il
+//  existe, passe devant. Le plan est fixé ici, pas par la page : on ne
+//  laisse pas un visiteur choisir ce qu'il paie.
 //
 //  Déploiement : « Verify JWT » activé (la page envoie la clé anon).
 // =====================================================================
 
 const WHOP_API_KEY = Deno.env.get('WHOP_API_KEY') ?? ''
-const WHOP_ACCOUNT_ID = Deno.env.get('WHOP_ACCOUNT_ID') ?? ''
-const PLAN = Deno.env.get('WHOP_PLAN_ID') ?? ''
+const WHOP_ACCOUNT_ID = Deno.env.get('WHOP_ACCOUNT_ID') || 'biz_2UPvDyOXoBRIxE'   // Marcuus (whop.com/ml-deaf)
+const PLAN = Deno.env.get('WHOP_PLAN_ID') || 'plan_DrtsM796QriYh'                  // « Base 44 », 9,99 €, paiement unique
 
 // Les pages qui ont le droit d'appeler la fonction, et de servir d'adresse
 // de retour après une étape bancaire (3D Secure). Tout nouveau domaine de
