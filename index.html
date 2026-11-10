@@ -901,6 +901,11 @@ main:has(#viewDash:not([hidden])) > .page-head{display:none}
 }
 .panel-head .tag-via{margin-left:0;font-size:10.5px;color:var(--navy)}
 
+.tag-paye{
+  margin-left:7px;border-radius:99px;padding:2px 8px;
+  background:var(--green-bg);border:1px solid var(--line);
+  font-size:10.5px;font-weight:800;color:var(--green);vertical-align:middle;white-space:nowrap;
+}
 .tag-src{
   margin-left:7px;border-radius:99px;padding:2px 7px;
   background:var(--tint);border:1px solid var(--line);
@@ -1882,6 +1887,8 @@ const estVente = (statut) => statut in OFFRES;
 const VUES = [
   ['jour',      'Leads du jour', "Le vivier du jour, commun à toute l'équipe",
    '<path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M16 3v4M8 3v4M3 11h18"/>'],
+  ['optin',     'Opt-in',        'Formulaire rempli sur la page de vente, 9,99 € non payés',
+   '<path d="M4 6h16M4 12h10M4 18h6"/><circle cx="18" cy="16" r="3"/>'],
   ['pipeline',  'Pipeline',      'Tes leads, du plus récent au plus ancien',
    '<path d="M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v6h-4z"/>'],
   ['relances',  'Relances',      'Les leads que tu dois rappeler',
@@ -1939,7 +1946,7 @@ const SANS_FORMULAIRE = ['pipeline', 'relances', 'archive', 'dashboard', 'factur
 const EQUIPES = {
   starter: {
     nom: 'Base44',
-    vues: ['jour', 'pipeline', 'relances', 'archive', 'dashboard', 'factures'],
+    vues: ['jour', 'optin', 'pipeline', 'relances', 'archive', 'dashboard', 'factures'],
     saisie: false,
   },
   // Équipe Marcuus Lawrence : admins comme closers n'ont que les cinq
@@ -1968,6 +1975,9 @@ const vuesDeMonEquipe = () => estPartenaire()
       // Le parcours automatique (numéros africains) : l'administrateur
       // général seul vérifie les factures, dans l'équipe Base44.
       : id === 'auto' ? adminGeneral() && equipeChoisie() === 'starter'
+      // L'opt-in n'a pas encore payé les 9,99 € : l'administrateur général
+      // seul le voit (la base dit la même chose, 08-optin-whop.sql).
+      : id === 'optin' ? adminGeneral() && definition(equipeChoisie()).vues.includes(id)
       // Les dispos : chacun les siennes, l'administrateur celles de tous.
       : id === 'dispos' ? definition(equipeChoisie()).dispos !== false
       // La présence ne regarde que les administrateurs : rien chez le setter.
@@ -2254,7 +2264,7 @@ function construireNav(){
     <button class="tab-item ${id === vue ? 'on' : ''}" data-vue="${id}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ico}</svg>
       ${id === 'jour' ? 'Leads' : id === 'dashboard' ? 'Chiffres' : id === 'iclosed' ? 'iClosed'
-        : id === 'dispos' ? 'Dispos' : id === 'auto' ? 'Auto' : id === 'presence' ? 'Présence' : id === 'rapport' ? 'Rapport' : lib}
+        : id === 'dispos' ? 'Dispos' : id === 'auto' ? 'Auto' : id === 'presence' ? 'Présence' : id === 'rapport' ? 'Rapport' : id === 'optin' ? 'Opt-in' : lib}
       ${['relances','factures','iclosed'].includes(id) ? `<span class="tab-dot" id="dot-${id}" hidden></span>` : ''}
     </button>`).join('');
 
@@ -2359,7 +2369,11 @@ function bornesJour(decalage = 0){
   return [d.toISOString(), f.toISOString()];
 }
 
-const COLS = 'id,created_at,first_name,last_name,email,phone,status,setter_id,follow_up_at,dials,cash_collecte,commission,notes,page_url,vivier,message_at,vague,formulaire_at,source,enr:lead_calls(count)';
+/* L'opt-in : ceux qui ont rempli le formulaire sans payer les 9,99 €. On
+   laisse une demi-heure avant de les montrer : quelqu'un en train de payer
+   ne doit pas recevoir un appel d'opt-in. */
+const OPTIN_DELAI_MS = 30 * 60 * 1000;
+const COLS = 'id,created_at,first_name,last_name,email,phone,status,setter_id,follow_up_at,dials,cash_collecte,commission,notes,page_url,vivier,message_at,vague,formulaire_at,source,paye_at,enr:lead_calls(count)';
 
 /* Un lead qu'on a eu au téléphone doit avoir sa note et son
    enregistrement : c'est ce qui permet de reprendre le dossier et de
@@ -2401,6 +2415,7 @@ async function charger(silencieux){
      rassemblent tout — un rappel oublié parce qu'il était rangé dans
      l'autre onglet resterait oublié. */
   const pool = vue === 'iclosed' ? '&vivier=eq.iclosed'
+             : vue === 'optin' ? '&vivier=eq.optin'
              : vue === 'relances' ? ''
              : '&vivier=eq.formulaire';
   const filtreEquipe = `&equipe=eq.${equipeChoisie()}`;
@@ -2409,6 +2424,12 @@ async function charger(silencieux){
   if (vue === 'iclosed'){
     const vg = vagueFiltre ? `&vague=eq.${vagueFiltre}` : '';
     q = `/rest/v1/leads?select=${COLS}${filtre}${pool}${filtreEquipe}${vg}&order=created_at.desc&limit=300`;
+  } else if (vue === 'optin'){
+    // Libres et pris, le plus récent d'abord.
+    const perso = me.role === 'admin' && !equipe;
+    const avant = new Date(Date.now() - OPTIN_DELAI_MS).toISOString();
+    q = `/rest/v1/leads?select=${COLS}${perso ? filtre : ''}${pool}${filtreEquipe}`
+      + `&created_at=lt.${avant}&order=created_at.desc&limit=500`;
   } else if (vue === 'jour'){
     const [d, f] = bornesJour();
     // Le vivier ne contient que ce qui n'appartient à personne : dès qu'un
@@ -2505,13 +2526,13 @@ async function majCompteurs(){
 async function majContexte(){
   if (vue === 'dashboard') return;
   const [a, b] = bornesJour();
-  const icl = vue === 'iclosed';
+  const icl = vue === 'iclosed' || vue === 'optin';
 
   /* La barre doit dire la même chose que la liste sous elle. Deux
      différences pour le vivier iClosed : on ne compte que lui, et pas
      seulement la journée — un call date d'il y a deux mois, borner à
      aujourd'hui n'afficherait jamais que des zéros. */
-  const pool = icl ? 'iclosed' : vue === 'relances' ? null : 'formulaire';
+  const pool = icl ? vue : vue === 'relances' ? null : 'formulaire';
 
   try {
     const cible = cibleChoisie();
@@ -2629,6 +2650,7 @@ function afficher(){
       vue === 'relances' ? 'Aucune relance en attente. Tout est à jour.' :
       vue === 'pipeline' ? "Aucun lead à toi pour l'instant. Prends-en un dans « Leads du jour »." :
       vue === 'iclosed'  ? "Aucun call iClosed à rappeler. Un administrateur t'en attribuera." :
+      vue === 'optin'    ? "Aucun opt-in pour l'instant. Ceux qui ne paient pas les 9,99 € arrivent ici au bout de 30 minutes." :
                            'Aucun lead ne correspond.'}</div>`;
     majBulk();
     return;
@@ -2648,6 +2670,7 @@ function afficher(){
       <div class="c-lead"><b>${echap(nomLead(l))}</b>${
         via(l) ? `<span class="tag-via">Via ${echap(via(l))}</span>` : ''}${
         vue === 'relances' && l.vivier === 'iclosed' ? '<span class="tag-src">iClosed</span>' : ''}${
+        l.paye_at ? `<span class="tag-paye" title="9,99 € payés le ${jourHeure(l.paye_at)}">Payé 9,99 €</span>` : ''}${
         l.vivier === 'iclosed' && l.message_at
           ? '<span class="tag-msg" title="Message envoyé le ' + jourHeure(l.message_at) + '">✉ envoyé</span>' : ''}${
         !manque.length ? ''
@@ -2667,7 +2690,8 @@ function afficher(){
         // téléphone — « tu nous avais laissé tes coordonnées en juin ».
         // Sans cette date, on affiche celle de l'import, sans commentaire :
         // le CRM ne prétend pas savoir ce qu'on ne lui a pas dit.
-        vue !== 'iclosed' ? heure(l.created_at)
+        vue === 'optin' ? `<span title="Formulaire rempli le ${jourHeure(l.created_at)}">${jourCourt(l.created_at)}</span><span class="age">${echap(depuis(l.created_at))}</span>`
+        : vue !== 'iclosed' ? heure(l.created_at)
           : l.formulaire_at
             ? `<span title="Formulaire rempli le ${jourHeure(l.formulaire_at)}">${
                 jourCourt(l.formulaire_at)}</span><span class="age">${echap(depuis(l.formulaire_at))}</span>`
@@ -2871,7 +2895,7 @@ function dessinerPanneau(l){
   // notes — n'a de sens qu'une fois le lead à soi, donc depuis le pipeline.
   // Un lead que personne n'a pris : le vivier du jour, mais aussi un call
   // iClosed qu'un administrateur a importé sans l'attribuer.
-  const vivier = (vue === 'jour' || vue === 'iclosed') && !l.setter_id;
+  const vivier = (vue === 'jour' || vue === 'iclosed' || vue === 'optin') && !l.setter_id;
   const aMoi = l.setter_id === me.user_id;
   const priPar = l.setter_id ? nomSetter(l.setter_id) : null;
   const prise = aMoi
@@ -2884,7 +2908,7 @@ function dessinerPanneau(l){
   /* Les dix minutes n'ont de sens que sur le vivier du jour, où un lead
      frais file à quelqu'un d'autre si personne ne l'appelle. Un call
      iClosed date de plusieurs mois : rien n'expire, rien ne presse. */
-  const decompte = l.vivier === 'iclosed' ? '' : `
+  const decompte = (l.vivier === 'iclosed' || l.vivier === 'optin') ? '' : `
     <div class="panel-reste">
       <span class="panel-reste-v v" data-deadline="${l.created_at}"></span>
       <span class="l">avant les 10 minutes</span>
@@ -4743,6 +4767,8 @@ function ecouterLesLeads(){
     .subscribe((etat) => direct(etat === 'SUBSCRIBED'));
 }
 
+const sonnesPaye = new Set();   // les leads payés déjà annoncés
+
 function recevoirChangement(message){
   const ligne = message.new || message.old;
   if (ligne && ligne.id) vusRecemment.add(ligne.id);
@@ -4750,11 +4776,24 @@ function recevoirChangement(message){
   // Un lead vraiment neuf mérite qu'on lève les yeux, où qu'on soit dans
   // le CRM. Les autres changements se contentent de rafraîchir la vue.
   // Un lead du parcours automatique ne concerne pas les setters : pas de
-  // son, pas d'annonce. Il attend dans l'onglet Automatique.
-  if (message.eventType === 'INSERT' && message.new && !message.new.setter_id
-      && message.new.vivier !== 'auto'){
-    const qui = nomLead(message.new);
+  // son, pas d'annonce. Il attend dans l'onglet Automatique. Un opt-in
+  // (formulaire rempli, 9,99 € pas payés) non plus : il attend dans Opt-in.
+  const n = message.new;
+  if (message.eventType === 'INSERT' && n && !n.setter_id
+      && n.vivier !== 'auto' && n.vivier !== 'optin'){
+    const qui = nomLead(n);
     toast('Nouveau lead' + (qui ? ' : ' + qui : ''));
+    ding();
+  }
+  // Le paiement des 9,99 € fait passer un opt-in dans les Leads du jour :
+  // c'est une mise à jour, pas une création, et c'est là qu'il faut sonner.
+  // Une seule fois par lead : il sera encore modifié ensuite.
+  if (message.eventType === 'UPDATE' && n && !n.setter_id && n.vivier === 'formulaire'
+      && n.paye_at && Date.now() - Date.parse(n.paye_at) < 5 * 60 * 1000
+      && !sonnesPaye.has(n.id)){
+    sonnesPaye.add(n.id);
+    const qui = nomLead(n);
+    toast('Nouveau lead payé' + (qui ? ' : ' + qui : ''));
     ding();
   }
 
