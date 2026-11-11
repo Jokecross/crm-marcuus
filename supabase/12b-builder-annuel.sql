@@ -34,7 +34,8 @@ $$;
 alter table public.leads drop column if exists commission;
 alter table public.leads add column commission numeric(10,2)
   generated always as (
-    case status::text
+    -- Comparaison directe du statut (status::text n'est pas accepté ici).
+    case status
       when 'monthly'        then round(cash_collecte * 0.10, 2)
       when 'yearly'         then round(cash_collecte * case when closed_at < to_timestamp(1794351600) then 0.15 else 0.125 end, 2)
       when 'yearly_builder' then round(cash_collecte * 0.15, 2)
