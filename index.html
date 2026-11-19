@@ -1782,6 +1782,7 @@ main:has(#viewDash:not([hidden])) > .page-head{display:none}
         <select id="dashSource">
           <option value="formulaire">Leads des setters</option>
           <option value="auto">Parcours automatique</option>
+          <option value="optin">Opt-in (compté à part)</option>
         </select>
       </div>
       </div>
@@ -1896,7 +1897,7 @@ const estVente = (statut) => statut in OFFRES;
 const VUES = [
   ['jour',      'Leads du jour', "Le vivier du jour, commun à toute l'équipe",
    '<path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M16 3v4M8 3v4M3 11h18"/>'],
-  ['optin',     'Opt-in',        'Formulaire rempli sur la page de vente, 9,99 € non payés',
+  ['optin',     'Opt-in',        'Formulaire rempli, 9,99 € non payés · compté à part de tes chiffres',
    '<path d="M4 6h16M4 12h10M4 18h6"/><circle cx="18" cy="16" r="3"/>'],
   ['pipeline',  'Pipeline',      'Tes leads, du plus récent au plus ancien',
    '<path d="M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v6h-4z"/>'],
@@ -1986,9 +1987,10 @@ const vuesDeMonEquipe = () => estPartenaire()
       // Le parcours automatique (numéros africains) : l'administrateur
       // général seul vérifie les factures, dans l'équipe Base44.
       : id === 'auto' ? adminGeneral() && equipeChoisie() === 'starter'
-      // L'opt-in n'a pas encore payé les 9,99 € : l'administrateur général
-      // seul le voit (la base dit la même chose, 08-optin-whop.sql).
-      : id === 'optin' ? adminGeneral() && definition(equipeChoisie()).vues.includes(id)
+      // L'opt-in (9,99 € non payés) : ouvert à toute l'équipe Base44 depuis
+      // le 19/11 (13-optin-sales.sql). Ses leads gardent le vivier « optin » :
+      // ils ne comptent jamais dans les chiffres de base du setter.
+      : id === 'optin' ? definition(equipeChoisie()).vues.includes(id)
       // Les dispos : chacun les siennes, l'administrateur celles de tous.
       : id === 'dispos' ? definition(equipeChoisie()).dispos !== false
       // La présence ne regarde que les administrateurs : rien chez le setter.
@@ -2446,10 +2448,13 @@ async function charger(silencieux){
     const vg = vagueFiltre ? `&vague=eq.${vagueFiltre}` : '';
     q = `/rest/v1/leads?select=${COLS}${filtre}${pool}${filtreEquipe}${vg}&order=created_at.desc&limit=300`;
   } else if (vue === 'optin'){
-    // Libres et pris, le plus récent d'abord.
+    // Le plus récent d'abord. Un setter voit ceux que personne n'a pris et
+    // les siens ; l'administrateur, tout, ou ceux d'une personne.
     const perso = me.role === 'admin' && !equipe;
+    const qui = me.role === 'admin' ? (perso ? filtre : '')
+      : `&or=(setter_id.is.null,setter_id.eq.${me.user_id})`;
     const avant = new Date(Date.now() - OPTIN_DELAI_MS).toISOString();
-    q = `/rest/v1/leads?select=${COLS}${perso ? filtre : ''}${pool}${filtreEquipe}`
+    q = `/rest/v1/leads?select=${COLS}${qui}${pool}${filtreEquipe}`
       + `&created_at=lt.${avant}&order=created_at.desc&limit=500`;
   } else if (vue === 'jour'){
     const [d, f] = bornesJour();
@@ -2691,6 +2696,7 @@ function afficher(){
       <div class="c-lead"><b>${echap(nomLead(l))}</b>${
         via(l) ? `<span class="tag-via">Via ${echap(via(l))}</span>` : ''}${
         vue === 'relances' && l.vivier === 'iclosed' ? '<span class="tag-src">iClosed</span>' : ''}${
+        vue === 'relances' && l.vivier === 'optin' ? '<span class="tag-src">Opt-in</span>' : ''}${
         l.paye_at ? `<span class="tag-paye" title="9,99 € payés le ${jourHeure(l.paye_at)}">Payé 9,99 €</span>` : ''}${
         l.vivier === 'iclosed' && l.message_at
           ? '<span class="tag-msg" title="Message envoyé le ' + jourHeure(l.message_at) + '">✉ envoyé</span>' : ''}${
@@ -3231,7 +3237,9 @@ async function prendreLead(lead){
   }
 
   Object.assign(lead, maj[0]);
-  toast(dejaPris ? 'Lead réattribué' : 'Lead pris — il est dans ton pipeline');
+  toast(dejaPris ? 'Lead réattribué'
+    : lead.vivier === 'optin' ? 'Lead pris — il reste dans Opt-in, compté à part de tes chiffres'
+    : 'Lead pris — il est dans ton pipeline');
 
   // Il quitte le vivier sans fermer le panneau : le setter enchaîne sur
   // l'appel avec la fiche complète, déjà ouverte.
@@ -5947,7 +5955,13 @@ async function chargerStats(){
   const nom = qui && qui !== me.user_id
     ? (staff.find(s => s.user_id === qui) || {}).first_name
     : null;
-  const vivier = { formulaire: 'leads du formulaire', iclosed: 'relances iClosed' }[$('dashSource').value];
+  // L'opt-in n'existe que dans les équipes qui ont l'onglet.
+  const optOpt = $('dashSource').querySelector('option[value="optin"]');
+  if (optOpt){
+    optOpt.hidden = !definition(equipeChoisie()).vues.includes('optin');
+    if (optOpt.hidden && $('dashSource').value === 'optin') $('dashSource').value = 'formulaire';
+  }
+  const vivier = { formulaire: 'leads du formulaire', iclosed: 'relances iClosed', optin: 'opt-in, à part' }[$('dashSource').value];
   // Sur une plage choisie à la main, on rappelle laquelle : le menu dit
   // « Dates au choix », ce qui ne dit rien des dates.
   const quand = $('periode').value === 'perso' && (a || b)
