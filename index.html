@@ -2455,7 +2455,7 @@ async function charger(silencieux){
       : `&or=(setter_id.is.null,setter_id.eq.${me.user_id})`;
     const avant = new Date(Date.now() - OPTIN_DELAI_MS).toISOString();
     q = `/rest/v1/leads?select=${COLS}${qui}${pool}${filtreEquipe}`
-      + `&created_at=lt.${avant}&order=created_at.desc&limit=500`;
+      + `&created_at=lt.${avant}&order=created_at.desc&limit=2000`;
   } else if (vue === 'jour'){
     const [d, f] = bornesJour();
     // Le vivier ne contient que ce qui n'appartient à personne : dès qu'un
